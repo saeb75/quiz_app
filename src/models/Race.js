@@ -6,7 +6,7 @@ const resultOneQuestionSchema = new mongoose.Schema({
     required: true,
   },
   answer: {
-    type: boolean,
+    type: Boolean,
     required: true,
   },
 });
@@ -53,8 +53,12 @@ const quizRaceSchema = new mongoose.Schema(
       type: [raceSchema],
       required: true,
     },
+    RequestRival: {
+      type: Boolean,
+      default: false,
+    },
   },
-  { timeseries }
+  { timestamps: true }
 );
 
 const data = {
