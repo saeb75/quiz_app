@@ -1,4 +1,5 @@
-const mongoose = require("mongoose");
+const { default: mongoose } = require("mongoose");
+
 const resultOneQuestionSchema = new mongoose.Schema({
   question: {
     type: mongoose.Schema.Types.ObjectId,
@@ -19,8 +20,18 @@ const playerResultSchema = new mongoose.Schema({
   result: {
     type: [resultOneQuestionSchema],
   },
+  answerd: {
+    type: Boolean,
+    default: false,
+    required: true,
+  },
 });
 const raceSchema = new mongoose.Schema({
+  quiz: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Quiz",
+    required: true,
+  },
   questions: {
     type: [mongoose.Schema.Types.ObjectId],
     required: true,
@@ -36,51 +47,11 @@ const raceSchema = new mongoose.Schema({
     ref: "User",
     default: 0,
   },
-  stauts: {
+  status: {
     type: String,
-    default: "pending",
-    enum: ["pending", "inProgress", "finished"],
+    default: "inProgress",
+    enum: ["inProgress", "finished"],
   },
 });
-const quizRaceSchema = new mongoose.Schema(
-  {
-    players: {
-      type: [mongoose.Schema.Types.ObjectId],
-      ref: "User",
-      required: true,
-    },
-    races: {
-      type: [raceSchema],
-      required: true,
-    },
-    RequestRival: {
-      type: Boolean,
-      default: false,
-    },
-  },
-  { timestamps: true }
-);
 
-const data = {
-  players: ["playerId"],
-  race: [
-    {
-      questions: [1, 2, 3],
-      players: [
-        {
-          player: "playerOneID",
-          result: [
-            {
-              question: "question",
-              answer: true,
-            },
-          ],
-        },
-      ],
-      turn: "playerOneID",
-      stauts: "pending",
-    },
-  ],
-};
-
-module.exports = mongoose.model("QuizRace", quizRaceSchema);
+module.exports = mongoose.model("Race", raceSchema);

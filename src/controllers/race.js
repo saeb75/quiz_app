@@ -1,66 +1,67 @@
 const Question = require("../models/Question");
+const Quiz = require("../models/Quiz");
 const Race = require("../models/Race");
-// const data = {
-//   players: ["playerId"],
-//   race: [
-//     {
-//       questions: [1, 2, 3],
-//       players: [
-//         {
-//           player: "playerOneID",
-//           result: [
-//             {
-//               question: "question",
-//               answer: true,
-//             },
-//           ],
-//         },
-//       ],
-//       turn: "playerOneID",
-//       stauts: "pending",
-//     },
-//   ],
-// };
+
 class RaceController {
-  async AnswersQuestion(req, res, next) {
+  async create(req, res, next) {
     try {
       const { _id } = req.user;
-      const { raceId, quizId, result } = req.body;
-      console.log(result);
-      console.log(_id);
-      console.log(result);
-      const race = await Race.findOneAndUpdate(
-        {
-          _id: quizId,
+      const { quizId } = req.body;
+      const question = await Question.aggregate([{ $sample: { size: 2 } }]);
+      const quiz = await Quiz.findById(quizId);
+      if (question.length === 0) {
+        throw { status: 404, message: "No question found" };
+      }
 
-          "races._id": raceId,
-        },
+      const questionIds = question.map((question) => question._id);
+      let raceObj = {
+        quiz: quizId,
+        questions: questionIds,
+        players: quiz.players.map((item) => {
+          return {
+            player: item._id,
+            result: [],
+            answerd: false,
+          };
+        }),
+        turn: _id,
+      };
+      const newRace = await Race.create(raceObj);
+      if (!newRace) {
+        throw { success: false, message: "new race not created" };
+      }
+      const updatedQuiz = await Quiz.findByIdAndUpdate(
+        quizId,
         {
-          $set: {
-            "races.$.players.$[player].result": result,
+          $push: {
+            races: newRace._id,
           },
         },
-        { arrayFilters: [{ "player.player": _id }] }
-      );
-      // const race = await Race.findOne(
-      //   {
-      //     _id: quizId,
-
-      //     "races._id": raceId,
-      //     "races.players.player": _id,
-      //   },
-      //   {
-      //     "races.players.$$.result": 1,
-      //   }
-      // );
-      console.log(race);
-      if (!race) {
-        res.status(400).json({
-          success: false,
-          message: "not Found a Race",
+        { new: true }
+      ).populate("races");
+      if (updatedQuiz) {
+        res.json({
+          race: newRace,
+          success: true,
         });
       }
-      res.json({
+    } catch (error) {
+      next(error);
+    }
+  }
+  async getExistRace(req, res, next) {
+    try {
+      const { _id } = req.user;
+      const { quizId, raceId } = req.body;
+      const race = await Race.findOne({ _id: raceId, turn: _id, quiz: quizId });
+      if (!race) {
+        throw {
+          status: 400,
+          message: "not found a race with this information",
+        };
+      }
+      return res.json({
+        success: true,
         race,
       });
     } catch (error) {
@@ -68,57 +69,86 @@ class RaceController {
       next(error);
     }
   }
-  async create(req, res, next) {
+
+  async AnswersQuestion(req, res, next) {
     try {
-      const player = req.user;
-      let raceObj = {};
-      const question = await Question.aggregate([{ $sample: { size: 2 } }]);
-      if (question.length === 0) {
-        throw { status: 404, message: "No question found" };
-      }
-      const questionIds = question.map((question) => question._id);
-      raceObj = {
-        players: [player._id],
-        races: [
-          {
-            questions: questionIds,
-            players: [
-              {
-                player: player._id,
-              },
-            ],
-            turn: player._id,
-            status: "pending",
-          },
-        ],
+      const { _id } = req.user;
+      const { raceId, quizId, result } = req.body;
+      const quizUpdateObj = {};
+      const raceUpdateObj = {
+        "players.$[player].result": result,
+        "players.$[player].answerd": true,
       };
-      const newRace = await Race.create(raceObj);
-      if (!newRace)
-        return res.status(400).json({
-          succes: false,
-          message: "New Race Dosnt Create",
+      const quiz = await Quiz.findOne({ _id: quizId, races: raceId }).populate(
+        "races"
+      );
+      const race = quiz.races.find((item) => item._id == raceId);
+      if (!quiz) {
+        throw { status: 404, message: "No quiz found" };
+      }
+      console.log(quiz);
+      if (quiz.players.length === 1) {
+        quizUpdateObj.RequestRival = true;
+        quizUpdateObj.turn = null;
+        raceUpdateObj.turn = null;
+      }
+
+      if (quiz.players.length === 2) {
+        const rivalPlayer = race.players.find((item) => {
+          return item.player.toString() != _id.toString();
         });
-      const createdRace = await Race.findById(newRace._id).populate([
+
+        if (rivalPlayer.answerd) {
+          raceUpdateObj.status = "finished";
+          raceUpdateObj.turn = null;
+          quizUpdateObj.turn = _id;
+        } else {
+          raceUpdateObj.turn = rivalPlayer.player;
+          quizUpdateObj.turn = rivalPlayer.player;
+        }
+      }
+
+      const updatedRace = await Race.findOneAndUpdate(
         {
-          path: "players",
+          quiz: quizId,
+          _id: raceId,
         },
         {
-          path: "races",
-          populate: [
-            {
-              path: "questions",
-              model: "Question",
-            },
-            {
-              path: "players.player",
-              model: "User",
-              select: "name",
-            },
-          ],
+          $set: raceUpdateObj,
         },
-      ]);
-      res.json({ race: createdRace.races[0], success: true });
+        { arrayFilters: [{ "player.player": _id }], new: true }
+      );
+      const updatedQuiz = await Quiz.findOneAndUpdate(
+        {
+          _id: quizId,
+        },
+        {
+          $set: quizUpdateObj,
+        },
+        { new: true }
+      );
+      // const race = await Race.findOne(
+      //   {
+      //     _id: quizId,
+      //     "races._id": raceId,
+      //     "races.players.player": _id,
+      //   },
+      //   {
+      //     "races.players.$$.result": 1,
+      //   }
+      // );
+
+      if (!updatedQuiz) {
+        res.status(400).json({
+          success: false,
+          message: "not Found a Race",
+        });
+      }
+      res.json({
+        updatedQuiz,
+      });
     } catch (error) {
+      console.log(error);
       next(error);
     }
   }

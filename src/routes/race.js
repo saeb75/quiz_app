@@ -1,14 +1,20 @@
 const errorMapper = require("../middelwares/errorMapper");
-// const {
-//   createQuestionValidation,
-// } = require("../validations/questionValidation");
-
-const { RaceController } = require("../controllers/race");
 const { checkLogin } = require("../middelwares/checkLogin");
-const { ansewerToQuestion } = require("../validations/raceValidation");
+const { RaceController } = require("../controllers/Race");
+const {
+  createRaceValidation,
+  ansewerToQuestion,
+} = require("../validations/raceValidation");
 
 const router = require("express").Router();
 
+router.post(
+  "/create",
+  checkLogin,
+  createRaceValidation(),
+  errorMapper,
+  RaceController.create
+);
 router.post(
   "/answer",
   checkLogin,
@@ -16,7 +22,12 @@ router.post(
   errorMapper,
   RaceController.AnswersQuestion
 );
-router.post("/create", checkLogin, RaceController.create);
+router.post(
+  "/getExistRace",
+  checkLogin,
+
+  RaceController.getExistRace
+);
 
 module.exports = {
   raceRouter: router,
